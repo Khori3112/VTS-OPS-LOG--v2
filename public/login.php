@@ -26,18 +26,28 @@ unset($_SESSION['flash_error'], $_SESSION['flash_success']);
               border:1px solid rgba(255,255,255,0.09);box-shadow:0 24px 64px rgba(0,0,0,0.55)}
   .input-dark{display:block;width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
               color:#e2e8f0;border-radius:8px;padding:11px 12px 11px 42px;font-size:14px;outline:none;
-              transition:border-color .15s,background .15s;font-family:'Inter',sans-serif}
+              transition:border-color .15s,background .15s,box-shadow .15s;font-family:'Inter',sans-serif}
   .input-dark::placeholder{color:rgba(255,255,255,.25)}
-  .input-dark:focus{background:rgba(254,203,0,.05);border-color:rgba(254,203,0,.5)}
-  .input-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#64748b;pointer-events:none;font-size:18px!important}
+  .input-dark:focus{background:rgba(254,203,0,.08);border-color:rgba(254,203,0,.55);box-shadow:0 0 0 4px rgba(254,203,0,.08)}
+  .input-icon{position:absolute;left:0;top:50%;transform:translate(0,-50%);color:#64748b;font-size:18px!important;pointer-events:none;}
+  .input-icon-button{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:999px;border:none;background:transparent;color:#64748b;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .2s,color .2s,transform .2s;}
+  .input-icon-button:hover{background:rgba(254,203,0,.12);color:#FECB00;transform:scale(1.05);}
+  .clickable-icon{cursor:pointer;transition:transform .2s,color .2s,opacity .2s;}
+  .clickable-icon:hover{transform:scale(1.06);color:#FECB00;opacity:.95;}
+  .icon-action:focus-visible{outline:2px solid #FECB00;outline-offset:4px;}
   .btn-login{width:100%;background:linear-gradient(135deg,#FECB00 0%,#d4a800 100%);color:#001E40;
              font-weight:800;font-size:13px;letter-spacing:.12em;text-transform:uppercase;
-             border:none;border-radius:8px;padding:14px;cursor:pointer;transition:filter .15s,transform .1s;
-             font-family:'Inter',sans-serif}
-  .btn-login:hover{filter:brightness(1.08)}
-  .btn-login:active{transform:scale(.98)}
+             border:none;border-radius:8px;padding:14px;cursor:pointer;transition:filter .15s,transform .1s,box-shadow .2s;
+             font-family:'Inter',sans-serif;box-shadow:0 12px 30px rgba(254,203,0,.18)}
+  .btn-login:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 16px 34px rgba(254,203,0,.24)}
+  .btn-login:active{transform:translateY(0);}
   @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-  .card-animate{animation:fadeUp .4s ease both}
+  @keyframes floatOrb{0%{transform:translate(0,0) rotate(0deg)}50%{transform:translate(8px,8px) rotate(3deg)}100%{transform:translate(0,0) rotate(0deg)}}
+  .card-animate{animation:fadeUp .4s ease both;will-change:transform,opacity;}
+  .glass-card{transition:transform .25s ease,box-shadow .25s ease;}
+  .glass-card:hover{transform:translateY(-4px);}
+  .orb1,.orb2{animation:floatOrb 18s ease-in-out infinite;}
+  .info-icon{color:#FECB00;}
   .orb1{position:fixed;top:-120px;right:-120px;width:480px;height:480px;
         background:radial-gradient(circle,rgba(0,30,64,.55) 0%,transparent 70%);pointer-events:none;z-index:0}
   .orb2{position:fixed;bottom:-120px;left:-120px;width:420px;height:420px;
@@ -80,7 +90,7 @@ unset($_SESSION['flash_error'], $_SESSION['flash_success']);
       <!-- Card Header -->
       <div class="px-8 py-5 border-b border-white/5" style="background:rgba(0,30,64,0.6)">
         <div class="flex items-center gap-3">
-          <span class="material-symbols-outlined text-[#FECB00]" style="font-size:20px;font-variation-settings:'FILL' 1">verified_user</span>
+          <button type="button" class="material-symbols-outlined text-[#FECB00] info-icon clickable-icon icon-action" data-action="header-info" aria-label="Info keamanan" style="font-size:20px;font-variation-settings:'FILL' 1">verified_user</button>
           <div>
             <p class="text-sm font-black text-white tracking-tight">Sistem Autentikasi</p>
             <p class="text-[10px] text-slate-400 tracking-wide">Akses terbatas personel berwenang</p>
@@ -109,14 +119,16 @@ unset($_SESSION['flash_error'], $_SESSION['flash_success']);
         <div>
           <!-- Authority Warning -->
           <div class="inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 rounded-sm" style="background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.25);">
-            <span class="material-symbols-outlined text-red-500" style="font-size:12px;font-variation-settings:'FILL' 1">warning</span>
+            <button type="button" class="material-symbols-outlined text-red-500 info-icon clickable-icon icon-action" data-action="warning-info" aria-label="Aturan akses" style="font-size:12px;font-variation-settings:'FILL' 1">warning</button>
             <span class="text-[9px] font-black text-red-400 tracking-[.2em] uppercase" style="font-weight:900;">Authority Access Only</span>
           </div>
           <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2" for="nip">
             Nomor Induk Pegawai (NIP)
           </label>
           <div class="relative">
-            <span class="material-symbols-outlined input-icon">badge</span>
+            <button type="button" class="input-icon-button clickable-icon icon-action" data-action="focus" data-target="nip" aria-label="Fokus NIP">
+              <span class="material-symbols-outlined">badge</span>
+            </button>
             <input class="input-dark" id="nip" name="nip" type="text" maxlength="30"
                    placeholder="Contoh: 19801010001" required autocomplete="username"/>
           </div>
@@ -127,13 +139,15 @@ unset($_SESSION['flash_error'], $_SESSION['flash_success']);
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest" for="password">Kata Sandi</label>
           </div>
           <div class="relative">
-            <span class="material-symbols-outlined input-icon" id="pwIcon">lock</span>
+            <button type="button" class="input-icon-button clickable-icon icon-action" data-action="focus" data-target="password" aria-label="Fokus Kata Sandi">
+              <span class="material-symbols-outlined">lock</span>
+            </button>
             <input class="input-dark" id="password" name="password" type="password"
                    placeholder="••••••••" required autocomplete="current-password"
                    style="padding-right:44px"/>
             <button type="button" id="togglePw"
                     class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-                    tabindex="-1">
+                    tabindex="-1" aria-label="Tampilkan atau sembunyikan kata sandi">
               <span class="material-symbols-outlined" id="eyeIcon" style="font-size:18px">visibility_off</span>
             </button>
           </div>
@@ -186,6 +200,51 @@ document.getElementById('togglePw')?.addEventListener('click', function() {
   const ico = document.getElementById('eyeIcon');
   pw.type          = pw.type === 'password' ? 'text' : 'password';
   ico.textContent  = pw.type === 'text' ? 'visibility' : 'visibility_off';
+});
+
+function iconActionHandler(event) {
+  const action = event.currentTarget.dataset.action;
+  if (!action) {
+    return;
+  }
+
+  if (action === 'focus') {
+    const targetId = event.currentTarget.dataset.target;
+    document.getElementById(targetId)?.focus();
+    return;
+  }
+
+  if (action === 'header-info') {
+    Swal.fire({
+      title: 'Keamanan Login',
+      html: '<p>Halaman ini hanya untuk user berwenang. Semua akses dicatat dan dipantau.</p>',
+      icon: 'info',
+      background: '#0f1523',
+      color: '#e2e8f0',
+      iconColor: '#FECB00',
+      confirmButtonColor: '#FECB00',
+      confirmButtonText: 'Tutup',
+    });
+    return;
+  }
+
+  if (action === 'warning-info') {
+    Swal.fire({
+      title: 'Akses Terbatas',
+      html: '<p>Hanya personel yang memiliki NIP dan password valid yang boleh menggunakan sistem ini.</p>',
+      icon: 'warning',
+      background: '#0f1523',
+      color: '#e2e8f0',
+      iconColor: '#FECB00',
+      confirmButtonColor: '#FECB00',
+      confirmButtonText: 'Mengerti',
+    });
+    return;
+  }
+}
+
+document.querySelectorAll('.icon-action').forEach((button) => {
+  button.addEventListener('click', iconActionHandler);
 });
 
 // Forgot Password flow
