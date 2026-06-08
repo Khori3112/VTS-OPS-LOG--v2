@@ -2,98 +2,126 @@
 /**
  * Emergency Credential Reset Script
  * -----------------------------------------------------------------
- * PERINGATAN KEAMANAN:
- *   - Script ini HANYA untuk digunakan dalam keadaan darurat.
- *   - HAPUS atau RENAME file ini setelah digunakan.
- *   - Jangan tinggalkan file ini di server produksi.
+ * Hanya boleh diakses oleh akun yang sudah diautentikasi dengan role Admin.
+ * Operasi ini hanya menggunakan POST dan CSRF token untuk menghindari
+ * eksekusi tidak sengaja.
  * -----------------------------------------------------------------
- * Akses: http://localhost:8000/public/reset_user.php?token=VTS_RESET_2026
  */
 
 declare(strict_types=1);
 
-// ─── Secret token guard ───────────────────────────────────────────────────
-// Ganti nilai ini sebelum digunakan, lalu hapus file ini setelahnya.
-const RESET_TOKEN = 'VTS_RESET_2026';
+require_once __DIR__ . '/../config/helpers.php';
 
-if (($_GET['token'] ?? '') !== RESET_TOKEN) {
+if (empty($_SESSION['user'])) {
     http_response_code(403);
-    die('403 Forbidden — Token tidak valid atau tidak ada.');
+    die('403 Forbidden — Anda harus login sebagai Admin untuk mengakses halaman ini.');
 }
 
-// ─── Konfirmasi eksekusi ──────────────────────────────────────────────────
-$confirmed = ($_GET['confirm'] ?? '') === 'yes';
+$userRole = (string) ($_SESSION['user']['role'] ?? '');
+if ($userRole !== 'Admin') {
+    http_response_code(403);
+    die('403 Forbidden — Akses terbatas hanya untuk role Admin.');
+}
 
-require_once __DIR__ . '/../config/database.php';
+$result = null;
+$errors = [];
+$generatedPasswords = [];
 
-$result   = null;
-$errors   = [];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrfOrDie('/public/reset_user.php');
 
-if ($confirmed) {
-    try {
-        $pdo = getPdo();
+    if (($_POST['confirm'] ?? '') === 'yes') {
+        try {
+            $pdo = getPdo();
+            $tables = [
+                'audit_logs',
+                'edit_requests',
+                'contravention_reports',
+                'special_ops_reports',
+                'incident_reports',
+                'pre_arrival_reports',
+                'handover_reports',
+                'tide_reports',
+                'weather_observations',
+                'weather_reports',
+                'vts_logs',
+                'vessel_traffic',
+                'attendance_logs',
+                'daily_shift_reports',
+                'users',
+            ];
 
-        // Nonaktifkan foreign key checks sementara agar TRUNCATE bisa berjalan
-        $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+            foreach ($tables as $table) {
+                $pdo->exec("TRUNCATE TABLE `{$table}`");
+            }
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 
-        // Kosongkan semua tabel yang bergantung pada users terlebih dahulu
-        $tables = [
-            'audit_logs',
-            'edit_requests',
-            'contravention_reports',
-            'special_ops_reports',
-            'incident_reports',
-            'pre_arrival_reports',
-            'handover_reports',
-            'tide_reports',
-            'weather_observations',
-            'weather_reports',
-            'vts_logs',
-            'vessel_traffic',
-            'attendance_logs',
-            'daily_shift_reports',
-            'users',
-        ];
-        foreach ($tables as $table) {
-            $pdo->exec("TRUNCATE TABLE `{$table}`");
+            $accounts = [
+                [
+                    'nip'           => '197505021997032001',
+                    'full_name'     => 'Merry Dhani Anitasari',
+                    'jabatan'       => 'Kepala Sub-seksi VTS',
+                    'role'          => 'Manager',
+                    'team'          => 'A',
+                ],
+                [
+                    'nip'           => '198003122007121001',
+                    'full_name'     => 'Ria Irawan, S.Pd',
+                    'jabatan'       => 'Penjaga Jaga (Watching Keeper)',
+                    'role'          => 'Supervisor',
+                    'team'          => 'A',
+                ],
+            ];
+
+            $stmt = $pdo->prepare(
+                'INSERT INTO users (nip, full_name, jabatan, password_hash, role, team, is_active)
+                 VALUES (:nip, :full_name, :jabatan, :password_hash, :role, :team, 1)'
+            );
+
+            foreach ($accounts as $account) {
+                $password = generateRandomPassword(16);
+                $stmt->execute([
+                    ':nip'           => $account['nip'],
+                    ':full_name'     => $account['full_name'],
+                    ':jabatan'       => $account['jabatan'],
+                    ':password_hash' => password_hash($password, PASSWORD_ARGON2ID),
+                    ':role'          => $account['role'],
+                    ':team'          => $account['team'],
+                ]);
+
+                $generatedPasswords[] = [
+                    'full_name' => $account['full_name'],
+                    'nip'       => $account['nip'],
+                    'role'      => $account['role'],
+                    'password'  => $password,
+                ];
+            }
+
+            $result = 'success';
+        } catch (Throwable $e) {
+            $errors[] = $e->getMessage();
+            $result = 'error';
+            try {
+                if (isset($pdo)) {
+                    $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+                }
+            } catch (Throwable) {
+                // ignore cleanup failure
+            }
         }
-
-        $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
-
-        // Hash password Argon2id
-        $passwordHash = password_hash('admin123', PASSWORD_ARGON2ID);
-
-        $stmt = $pdo->prepare(
-            'INSERT INTO users (nip, full_name, jabatan, password_hash, role, team, is_active)
-             VALUES (:nip, :full_name, :jabatan, :password_hash, :role, :team, 1)'
-        );
-
-        // Manager — Merry Dhani Anitasari
-        $stmt->execute([
-            ':nip'           => '197505021997032001',
-            ':full_name'     => 'Merry Dhani Anitasari',
-            ':jabatan'       => 'Kepala Sub-seksi VTS',
-            ':password_hash' => $passwordHash,
-            ':role'          => 'Manager',
-            ':team'          => 'A',
-        ]);
-
-        // Supervisor — Ria Irawan
-        $stmt->execute([
-            ':nip'           => '198003122007121001',
-            ':full_name'     => 'Ria Irawan, S.Pd',
-            ':jabatan'       => 'Penjaga Jaga (Watching Keeper)',
-            ':password_hash' => $passwordHash,
-            ':role'          => 'Supervisor',
-            ':team'          => 'A',
-        ]);
-
-        $result = 'success';
-
-    } catch (Throwable $e) {
-        $errors[] = $e->getMessage();
-        $result   = 'error';
     }
+}
+
+function generateRandomPassword(int $length = 16): string
+{
+    $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+';
+    $max = strlen($chars) - 1;
+    $password = '';
+    for ($i = 0; $i < $length; $i++) {
+        $password .= $chars[random_int(0, $max)];
+    }
+    return $password;
 }
 ?>
 <!DOCTYPE html>
@@ -106,7 +134,7 @@ if ($confirmed) {
         *, *::before, *::after { box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; min-height: 100vh;
                display: flex; align-items: center; justify-content: center; margin: 0; padding: 16px; }
-        .card { background: #fff; border-radius: 12px; padding: 40px; max-width: 520px; width: 100%;
+        .card { background: #fff; border-radius: 12px; padding: 40px; max-width: 640px; width: 100%;
                 box-shadow: 0 4px 24px rgba(0,0,0,.1); }
         h1 { margin: 0 0 4px; font-size: 1.4rem; color: #0f172a; }
         .badge-danger { display: inline-block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
@@ -143,72 +171,50 @@ if ($confirmed) {
 <div class="card">
     <div class="badge-danger">⚠ Emergency Only</div>
     <h1>Reset Kredensial Darurat</h1>
-    <p>Script ini akan menghapus seluruh data dan membuat ulang 2 akun default.</p>
+    <p>Operasi ini hanya dapat dilakukan oleh Admin dan tidak dapat dibatalkan.</p>
 
     <?php if ($result === 'success'): ?>
-    <div class="alert alert-success">
-        ✅ Reset berhasil! Database telah dikosongkan dan 2 akun baru telah dibuat.
-    </div>
-    <div class="user-list">
-        <table>
-            <tr><th>Nama</th><th>NIP</th><th>Role</th><th>Password</th></tr>
-            <tr>
-                <td>Merry Dhani Anitasari</td>
-                <td><code>197505021997032001</code></td>
-                <td><span class="role-tag role-manager">Manager</span></td>
-                <td><code>admin123</code></td>
-            </tr>
-            <tr>
-                <td>Ria Irawan, S.Pd</td>
-                <td><code>198003122007121001</code></td>
-                <td><span class="role-tag role-supervisor">Supervisor</span></td>
-                <td><code>admin123</code></td>
-            </tr>
-        </table>
-    </div>
-    <p style="color:#b91c1c;font-weight:600;">🔴 SEGERA hapus file <code>public/reset_user.php</code> dari server setelah ini!</p>
-    <a class="btn btn-back" href="login.php">← Kembali ke Login</a>
+        <div class="alert alert-success">
+            ✅ Reset berhasil! Database telah dikosongkan dan akun baru telah dibuat.
+        </div>
 
+        <div class="user-list">
+            <table>
+                <tr><th>Nama</th><th>NIP</th><th>Role</th><th>Password</th></tr>
+                <?php foreach ($generatedPasswords as $account): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($account['full_name']) ?></td>
+                        <td><code><?= htmlspecialchars($account['nip']) ?></code></td>
+                        <td><span class="role-tag <?= $account['role'] === 'Manager' ? 'role-manager' : 'role-supervisor' ?>"><?= htmlspecialchars($account['role']) ?></span></td>
+                        <td><code><?= htmlspecialchars($account['password']) ?></code></td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+        </div>
+
+        <p style="color:#b91c1c;font-weight:600;">🔴 Setelah reset, segera ubah password di akun Manager dan Supervisor.</p>
+        <a class="btn btn-back" href="<?= BASE_URL ?>login.php">← Kembali ke Login</a>
     <?php elseif ($result === 'error'): ?>
-    <div class="alert alert-error">
-        ❌ Reset gagal: <?= htmlspecialchars(implode('; ', $errors)) ?>
-    </div>
-    <a class="btn btn-back" href="login.php">← Kembali ke Login</a>
-
+        <div class="alert alert-error">
+            ❌ Reset gagal: <?= htmlspecialchars(implode('; ', $errors)) ?>
+        </div>
+        <a class="btn btn-back" href="<?= BASE_URL ?>login.php">← Kembali ke Login</a>
     <?php else: ?>
-    <div class="warn-box">
-        <strong style="color:#9a3412;">Tindakan ini TIDAK DAPAT dibatalkan:</strong>
-        <ul>
-            <li>Seluruh data laporan, vessel traffic, dan log akan dihapus permanen.</li>
-            <li>Seluruh akun pengguna akan dihapus dan diganti 2 akun baru.</li>
-            <li>Hanya lanjutkan jika Anda benar-benar tidak bisa login dengan cara apapun.</li>
-        </ul>
-    </div>
+        <div class="warn-box">
+            <strong style="color:#9a3412;">Perhatian:</strong>
+            <ul>
+                <li>Semua data laporan, aktivitas, dan log akan dihapus secara permanen.</li>
+                <li>Hanya lanjutkan jika tidak ada opsi lain untuk memulihkan akses.</li>
+                <li>Token CSRF digunakan untuk mencegah eksekusi tidak sengaja.</li>
+            </ul>
+        </div>
 
-    <div class="user-list">
-        <p style="margin:0 0 10px;font-weight:600;color:#0f172a;">Akun yang akan dibuat:</p>
-        <table>
-            <tr><th>Nama</th><th>NIP</th><th>Role</th><th>Password</th></tr>
-            <tr>
-                <td>Merry Dhani Anitasari</td>
-                <td><code>197505021997032001</code></td>
-                <td><span class="role-tag role-manager">Manager</span></td>
-                <td><code>admin123</code></td>
-            </tr>
-            <tr>
-                <td>Ria Irawan, S.Pd</td>
-                <td><code>198003122007121001</code></td>
-                <td><span class="role-tag role-supervisor">Supervisor</span></td>
-                <td><code>admin123</code></td>
-            </tr>
-        </table>
-    </div>
-
-    <a class="btn btn-danger"
-       href="reset_user.php?token=<?= htmlspecialchars(RESET_TOKEN) ?>&confirm=yes">
-        🗑 Ya, Hapus Semua Data &amp; Reset Akun
-    </a>
-    <a class="btn btn-back" href="login.php">← Batal, Kembali ke Login</a>
+        <form method="POST" action="<?= htmlspecialchars($_SERVER['PHP_SELF']) ?>">
+            <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>" />
+            <input type="hidden" name="confirm" value="yes" />
+            <button type="submit" class="btn btn-danger">🗑 Ya, Hapus Semua Data & Reset Akun</button>
+        </form>
+        <a class="btn btn-back" href="<?= BASE_URL ?>login.php">← Batal, Kembali ke Login</a>
     <?php endif; ?>
 </div>
 </body>
