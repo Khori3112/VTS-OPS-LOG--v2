@@ -1,0 +1,9 @@
+{
+  "name": "vdo/vts-ops-log",
+  "description": "VTS OPS-LOG Palembang Native PHP Application",
+  "type": "project",
+  "require": {
+    "php": ">=8.0",
+    "dompdf/dompdf": "^3.1"
+  }
+}
